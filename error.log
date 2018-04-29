@@ -1,0 +1,1 @@
+* alicloud_db_database.default: Create database got an error: &errors.ServerError{httpStatus:403, requestId:"9794DD75-B32C-4D50-917D-A3ACD3C4E857", hostId:"rds.eu-central-1.aliyuncs.com", errorCode:"OperationDenied.AccountMode", recommend:"", message:"The account mode of the specified instance does not support this operation.", comment:""}.

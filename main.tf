@@ -1,6 +1,5 @@
-data "terraform_remote_state" "network" {
-  backend = "s3"
-  config {
+terraform {
+  backend "s3" {
     bucket = "ci-ops-terraform-state"
     key    = "terraform.tfstate"
     region = "eu-west-1"
@@ -71,6 +70,31 @@ resource "alicloud_nat_gateway" "nat_gateway" {
 #   cooldown          = 60
 # }
 
+################################################################
+data "template_file" "init_script" {
+  template = "${file("scripts/init.cfg")}"
+  vars {
+    USERNAME = "${var.db_username}"
+    PASSWORD = "${var.db_password}"
+    HOSTNAME = "${alicloud_db_instance.default.connection_string}"
+  }
+}
+# data "template_file" "shell-script" {
+#   template = "${file("scripts/volumes.sh")}"
+#   vars {
+#     DEVICE = "${var.INSTANCE_DEVICE_NAME}"
+#   }
+# }
+data "template_cloudinit_config" "cloudinit" {
+  gzip = false
+  base64_encode = false
+  part {
+    filename     = "init.cfg"
+    content_type = "text/cloud-config"
+    content      = "${data.template_file.init_script.rendered}"
+  }
+}
+##################################################################
 
 resource "alicloud_instance" "app" {
   count                      = "1"
@@ -84,7 +108,7 @@ resource "alicloud_instance" "app" {
   internet_max_bandwidth_out = 10
   key_name                   = "default"
   security_groups            = ["${alicloud_security_group.app.id}"]
-  user_data                  = "${var.app_instance_user_data}"
+  user_data                  = "${data.template_cloudinit_config.cloudinit.rendered}"
 }
 
 resource "alicloud_slb" "app" {
@@ -101,10 +125,27 @@ resource "alicloud_slb_listener" "http" {
   bandwidth = 10
   protocol = "http"
   health_check_connect_port = 3000
+  health_check_http_code = "http_2xx,http_3xx"
   sticky_session = "on"
   sticky_session_type = "insert"
   cookie = "testslblistenercookie"
   cookie_timeout = 86400
+}
+
+# resource "alicloud_slb_server_group" "group" {
+#   load_balancer_id = "${alicloud_slb.app.id}"
+#   servers = [
+#     {
+#       server_ids = ["${alicloud_instance.app.*.id}"]
+#       port = 3000
+#       weight = 100
+#     }
+#   ]
+# }
+
+resource "alicloud_slb_attachment" "default" {
+  load_balancer_id    = "${alicloud_slb.app.id}"
+  instance_ids = ["${alicloud_instance.app.*.id}"]
 }
 
 resource "alicloud_security_group" "app" {
@@ -155,14 +196,11 @@ resource "alicloud_db_instance" "default" {
     security_ips = ["10.0.2.0/24"]
 }
 
-# resource "alicloud_db_connection" "default" {
-#     instance_id = "${alicloud_db_instance.default.id}"
-#     port = "3306"
-# }
-
 resource "alicloud_db_account" "master" {
     instance_id = "${alicloud_db_instance.default.id}"
     name = "${var.db_username}"
     password = "${var.db_password}"
     type = "Super"
 }
+
+

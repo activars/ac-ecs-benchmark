@@ -20,8 +20,8 @@ jobs:
       - run:
           name: Terraform Sync Config
           command: |
-             ./terraform remote config -backend=S3 -backend-config="bucket=$BUCKET" -backend-config="key=terraform.tfstate" -backend-config="region=us-east-1"
-            # ./terraform plan -out=terraform.plan
+            ./terraform init
+            ./terraform apply --var-file=parameters.tfvars
 
   # deployment:
   #   production:
